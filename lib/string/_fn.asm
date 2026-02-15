@@ -207,6 +207,35 @@ STR_MID SUBROUTINE
 	
 	IFCONST I_STR_LCASE_IMPORTED
 STR_LCASE SUBROUTINE
+	IF TARGET & gametank
+	; ROM-safe: use indirect indexed addressing via R0/R1
+	lda #<STRING_WORKAREA
+	clc
+	adc SP
+	adc #1
+	sta R0
+	lda #>STRING_WORKAREA
+	adc #0
+	sta R1
+	ldy #0
+	lda (R0),y
+	beq .exit
+	tay
+.loop
+	lda (R0),y
+	cmp #$C1
+	bcc .next
+	cmp #$DB
+	bcs .next
+	and #%01111111
+	sta (R0),y
+.next
+	dey
+	bne .loop
+.exit
+	rts
+	ELSE
+	; RAM-based targets: self-modifying code is fine
 	ldx SP
 	inx
 	stx .selfmod1 + 1
@@ -230,6 +259,7 @@ STR_LCASE SUBROUTINE
 .exit
 	rts
 	ENDIF
+	ENDIF
 	
 	; DECLARE FUNCTION UCASE$ AS STRING (instr$ AS STRING) SHARED STATIC INLINE
 	MAC F_ucase@_string
@@ -239,6 +269,35 @@ STR_LCASE SUBROUTINE
 	
 	IFCONST I_STR_UCASE_IMPORTED
 STR_UCASE SUBROUTINE
+	IF TARGET & gametank
+	; ROM-safe: use indirect indexed addressing via R0/R1
+	lda #<STRING_WORKAREA
+	clc
+	adc SP
+	adc #1
+	sta R0
+	lda #>STRING_WORKAREA
+	adc #0
+	sta R1
+	ldy #0
+	lda (R0),y
+	beq .exit
+	tay
+.loop
+	lda (R0),y
+	cmp #$41
+	bcc .next
+	cmp #$5B
+	bcs .next
+	ora #%10000000
+	sta (R0),y
+.next
+	dey
+	bne .loop
+.exit
+	rts
+	ELSE
+	; RAM-based targets: self-modifying code is fine
 	ldx SP
 	inx
 	stx .selfmod1 + 1
@@ -261,6 +320,7 @@ STR_UCASE SUBROUTINE
 	bne .loop
 .exit
 	rts
+	ENDIF
 	ENDIF
 	
 	; DECLARE FUNCTION VAL AS FLOAT (instr$ AS string) SHARED STATIC INLINE

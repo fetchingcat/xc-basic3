@@ -129,6 +129,41 @@ JIFFY EQU $8D
 	; SYS Command
 	; Use SYS 1 for fast call, SYS 0 for regular call
 	MAC sys ; @pull
+	IF TARGET & gametank
+	; ROM-safe: use trampoline via R0/R1
+	IF !FPULL
+	pla
+	sta R1
+	pla
+	sta R0
+	ELSE
+	sta R0
+	sty R1
+	ENDIF
+	IF {1} == 0
+	lda SPREG
+	pha
+	lda SAREG
+	ldx SXREG
+	ldy SYREG
+	plp
+	ENDIF
+	jsr .trampoline
+	bne .done
+	beq .done
+.trampoline
+	jmp (R0)
+.done
+	IF {1} == 0
+	php
+	sta SAREG
+	stx SXREG
+	sty SYREG
+	pla
+	sta SPREG
+	ENDIF
+	ELSE
+	; RAM-based targets: self-modifying code is fine
 	IF !FPULL
 	pla
 	sta .jsr + 2
@@ -155,6 +190,7 @@ JIFFY EQU $8D
 	sty SYREG
 	pla
 	sta SPREG
+	ENDIF
 	ENDIF
 	ENDM
 	
@@ -184,6 +220,29 @@ JIFFY EQU $8D
 	MAC wait ; @pull
 .MASK EQU R2
 .TRIG EQU R3
+	IF TARGET & gametank
+	; ROM-safe: use indirect addressing via R0/R1
+	IF !FPULL
+	pla
+	sta R1
+	pla
+	sta R0
+	ELSE
+	sta R0
+	sty R1
+	ENDIF
+	pla
+	sta .MASK
+	pla
+	sta .TRIG
+	ldy #0
+.loop
+	lda (R0),y
+	eor .TRIG
+	and .MASK
+	beq .loop
+	ELSE
+	; RAM-based targets: self-modifying code is fine
 	IF !FPULL
 	pla
 	sta .loop + 2
@@ -202,4 +261,5 @@ JIFFY EQU $8D
 	eor .TRIG
 	and .MASK
 	beq .loop
+	ENDIF
 	ENDM

@@ -2,6 +2,24 @@
 	
 	; DECLARE FUNCTION PEEK AS BYTE (address AS WORD) SHARED STATIC INLINE
 	MAC F_peek_word ; @push @pull
+	IF TARGET == gametank
+	; ROM-safe version using indirect addressing
+	IF !FPULL
+	pla
+	sta R1
+	pla
+	sta R0
+	ELSE
+	sta R0
+	sty R1
+	ENDIF
+	ldy #0
+	lda (R0),y
+	IF !FPUSH
+	pha
+	ENDIF
+	ELSE
+	; Self-modifying version (faster, requires RAM execution)
 	IF !FPULL
 	pla
 	sta .l + 2
@@ -14,6 +32,7 @@
 .l  lda $FFFF
 	IF !FPUSH
 	pha
+	ENDIF
 	ENDIF
 	ENDM
 

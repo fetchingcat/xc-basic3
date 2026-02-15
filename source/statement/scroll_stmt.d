@@ -7,6 +7,8 @@ import pegged.grammar;
 
 import std.string;
 
+import globals;
+
 /** Parses and compiles a HSCROLL/VSCROLL statement */
 class Scroll_stmt : Statement
 {
@@ -19,6 +21,10 @@ class Scroll_stmt : Statement
     /** Compile */
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError(toUpper(node.matches[0]) ~ "SCROLL is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree arg = node.children[0].children[0];
         Expression e = new Expression(arg, compiler);
         e.setExpectedType(compiler.getTypes().get(Type.UINT8));

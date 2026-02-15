@@ -39,7 +39,15 @@ SCINIT		 EQU $ff81
 	ENDM
 
 	; Return value of the ERR() function
+	IF TARGET & gametank
+	; ROM-based target: ERRNO must be in RAM
+	SEG.U "ERROR_STATE"
+	ORG $01F4
+ERRNO DS 1
+	SEG "LIBRARY"
+	ELSE
 ERRNO HEX 00
+	ENDIF
 
 	; Default error handler
 	; redirect to custor handling routine if set
@@ -68,5 +76,13 @@ RUNTIME_ERROR SUBROUTINE
 
 	; Error redirection vector
 	; If HB = 0 errors won't be redirected
+	IF TARGET & gametank
+	; ROM-based target: ERR_VECTOR must be in RAM
+	SEG.U "ERROR_STATE"
+	ORG $01F5
+ERR_VECTOR DS 2
+	SEG "LIBRARY"
+	ELSE
 ERR_VECTOR HEX 00 00
+	ENDIF
 	ENDIF

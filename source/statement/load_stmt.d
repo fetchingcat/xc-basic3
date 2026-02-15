@@ -5,6 +5,8 @@ import pegged.grammar;
 import compiler.compiler, compiler.type;
 import language.statement, language.expression;
 
+import globals;
+
 class Load_stmt : Statement
 {
     /** Class constructor */
@@ -16,6 +18,10 @@ class Load_stmt : Statement
     /** Compiles the statement */
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("LOAD is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree argList = this.node.children[0].children[0];
         Expression[3] e;
         Type[3] expectedTypes;

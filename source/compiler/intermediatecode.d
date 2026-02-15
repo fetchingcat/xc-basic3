@@ -29,8 +29,21 @@ class IntermediateCode
             ROUTINE_SEGMENT : "\nroutines_start:\n",
             LIBRARY_SEGMENT : "\n    ; !!opt_end!!\nlibrary_start:\n    SEG \"LIBRARY\"\n    ORG library_start\n" ~ getIncludes() ~ "\n",
             DATA_SEGMENT    : "\ndata_start:\n",
-            VAR_SEGMENT     : "vars_start:\n    SEG.U \"VARIABLES\"\n    ORG vars_start\n"
+            VAR_SEGMENT     : getVarSegmentHeader()
         ];
+    }
+
+    /** Generate variable segment header - uses variableAddress if specified */
+    private string getVarSegmentHeader()
+    {
+        if(variableAddress != -1) {
+            // Explicit variable address - place variables at specified location
+            return "vars_start:\n    SEG.U \"VARIABLES\"\n    ORG $" ~ 
+                   to!string(variableAddress, 16) ~ "\n";
+        } else {
+            // Default behavior - variables follow code
+            return "vars_start:\n    SEG.U \"VARIABLES\"\n    ORG vars_start\n";
+        }
     }
 
     /** Appends code or data to a segment */
@@ -77,6 +90,7 @@ pet4     EQU %0001000000100000
 pet4016  EQU %0001000000100010
 pet4032  EQU %0001000000100100
 pet8032  EQU %0001000001000100
+gametank EQU %0010000000000000
 TARGET   EQU ` ~ target ~ `
 USEIRQ   EQU ` ~ (useIrqs ? "1" : "0") ~ `
 FASTIRQ  EQU ` ~ (fastIrqs ? "1" : "0") ~ `

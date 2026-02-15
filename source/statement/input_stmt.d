@@ -7,6 +7,8 @@ import pegged.grammar;
 import compiler.compiler, compiler.type, compiler.variable;
 import language.statement, language.expression, language.stringliteral;
 
+import globals;
+
 class Input_stmt : Statement
 {
     /** Class constructor */
@@ -18,6 +20,10 @@ class Input_stmt : Statement
     /** Compiles the statement */
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("INPUT is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree args = this.node.children[0];
         bool hashStatement;
         int varIndex;

@@ -24,6 +24,10 @@ class Sprite_stmt : Statement
 
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("SPRITE is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree stmtNode = node.children[0];
         ParseTree sprNoNode = stmtNode.children[0];
         ParseTree[] sprSubCmdNodes = stmtNode.children[1..$];
@@ -115,6 +119,10 @@ class Sprite_multicolor_stmt : Statement
 
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("SPRITE MULTICOLOR is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree stmtNode = node.children[0];
         ParseTree xprListNode = stmtNode.children[0];
         if(xprListNode.children.length != 2) {
@@ -139,6 +147,10 @@ class Sprite_clearhit_stmt : Statement
 
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("SPRITE CLEAR HIT is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         this.appendCode("    sprite_clear_hit\n");
     }
 }

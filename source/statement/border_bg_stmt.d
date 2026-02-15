@@ -6,7 +6,7 @@ import compiler.compiler, compiler.type;
 import pegged.grammar;
 import globals;
 
-import std.conv;
+import std.conv, std.string;
 
 /** Parses and compiles a BORDER or BACKGROUND statement */
 abstract class Border_bg_stmt : Statement
@@ -22,6 +22,10 @@ abstract class Border_bg_stmt : Statement
     /** Compile */
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError(macroName().toUpper() ~ " is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree argList = this.node.children[0].children[0];
         Expression[2] e;
         const ulong reqArgs = (target == "cplus4" || target == "c16") ? 2 : 1;

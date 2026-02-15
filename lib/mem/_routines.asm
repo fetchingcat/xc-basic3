@@ -175,6 +175,22 @@ MEMSHIFT SUBROUTINE
 	ENDM
 	
 	MAC poke ; @pull
+	IF TARGET == gametank
+	; ROM-safe version using indirect addressing
+	IF !FPULL
+	pla
+	sta R1
+	pla
+	sta R0
+	ELSE
+	sta R0
+	sty R1
+	ENDIF
+	pla
+	ldy #0
+	sta (R0),y
+	ELSE
+	; Self-modifying version (faster, requires RAM execution)
 	IF !FPULL
 	pla
 	sta .l + 2
@@ -186,6 +202,7 @@ MEMSHIFT SUBROUTINE
 	ENDIF
 	pla
 .l  sta $ffff
+	ENDIF
 	ENDM
 	
 	; usage: poke {const address}

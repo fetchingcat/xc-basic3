@@ -9,6 +9,8 @@ import std.algorithm.searching;
 import language.statement, language.expression;
 import compiler.compiler, compiler.type;
 
+import globals;
+
 /** Compiles a WRITE# statement */
 class Write_stmt : Statement
 {
@@ -20,6 +22,10 @@ class Write_stmt : Statement
 
     public void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("WRITE# is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree exprList = this.node.children[0].children[0];
         const ulong exprCount = exprList.children.length;
         if(exprCount < 2) {

@@ -5,6 +5,8 @@ import pegged.grammar;
 import compiler.compiler, compiler.type;
 import language.statement, language.expression;
 
+import globals;
+
 class Open_stmt : Statement
 {
     /** Class constructor */
@@ -16,6 +18,10 @@ class Open_stmt : Statement
     /** Compiles the statement */
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("OPEN is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree list = this.node.children[0].children[0];
         if(list.children.length < 1) {
             compiler.displayError("At least one parameter must be specified for OPEN");

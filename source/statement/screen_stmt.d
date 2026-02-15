@@ -5,6 +5,8 @@ import language.statement, language.expression;
 import compiler.compiler, compiler.type;
 import pegged.grammar;
 
+import globals;
+
 /** Parses and compiles a SCREEN statement */
 class Screen_stmt : Statement
 {
@@ -17,6 +19,10 @@ class Screen_stmt : Statement
     /** Compile */
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("SCREEN is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree arg = this.node.children[0].children[0];
         Expression e = new Expression(arg, compiler);
         e.setExpectedType(compiler.getTypes().get(Type.UINT8));

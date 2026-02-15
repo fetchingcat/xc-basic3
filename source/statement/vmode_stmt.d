@@ -7,6 +7,8 @@ import pegged.grammar;
 import compiler.compiler, compiler.type;
 import language.statement, language.expression;
 
+import globals;
+
 class VMode_stmt : Statement
 {
     /** Class constructor */
@@ -17,6 +19,10 @@ class VMode_stmt : Statement
 
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("VMODE is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree stmtNode = node.children[0];
         foreach(ref subCmd; stmtNode.children) {
             ParseTree node = subCmd.children[0];

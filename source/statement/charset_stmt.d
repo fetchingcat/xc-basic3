@@ -7,6 +7,8 @@ import pegged.grammar;
 
 import std.algorithm.searching, std.uni;
 
+import globals;
+
 /** Parses and compiles a CHARAT statement */
 class Charset_stmt : Statement
 {
@@ -19,6 +21,10 @@ class Charset_stmt : Statement
     /** Compile */
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("CHARSET is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
 	if(canFind(["rom", "ram"], toLower(node.matches[1]))) {
 	    appendCode("    charset" ~ toLower(node.matches[1]) ~ "\n");
 	}

@@ -21,6 +21,8 @@ class Randomize_stmt : Statement
         exp.eval();
         appendCode(exp.toString());
         appendCode("    import I_RANDOMIZE\n");
+        appendCode("    import I_RNDL\n");
         appendCode("    pllongvar MATH_RND\n");
+        appendCode("    jsr I_RANDOMIZE\n");
     }
 }

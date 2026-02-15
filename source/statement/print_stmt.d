@@ -9,6 +9,8 @@ import std.algorithm.searching;
 import language.statement, language.expression;
 import compiler.compiler, compiler.type;
 
+import globals;
+
 /** Parses and compiles a PRINT statement */
 class Print_stmt : Statement
 {
@@ -21,6 +23,10 @@ class Print_stmt : Statement
     /** Compiles the statement */
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("PRINT is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         int ix = 0;
         bool hasHash = false;
         ParseTree stmt = this.node.children[0];

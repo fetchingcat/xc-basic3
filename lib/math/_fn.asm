@@ -521,8 +521,20 @@ SQRL SUBROUTINE
 	
 	
 	IFCONST I_RANDOMIZE_IMPORTED || I_RND_IMPORTED || I_RNDL_IMPORTED
+	IF TARGET & gametank
+	; ROM-based target: MATH_RND must be in RAM, not ROM
+	; Use an uninitialized segment at a fixed RAM address
+	; $01F0-$01F3 = safe area at bottom of hardware stack page
+	SEG.U "RNG_STATE"
+	ORG $01F0
+MATH_RND_EXP DS 1
+MATH_RND DS 3
+	SEG "LIBRARY"
+	ELSE
+	; RAM-based targets (C64 etc): code is in RAM, inline is fine
 MATH_RND_EXP HEX 80
 MATH_RND HEX 00 00 00
+	ENDIF
 	ENDIF
 	
 	; DECLARE FUNCTION RND AS FLOAT () SHARED STATIC INLINE
@@ -572,6 +584,20 @@ MATH_RND HEX 00 00 00
 	; http://rainwarrior.ca
 	IFCONST I_RNDL_IMPORTED
 I_RNDL SUBROUTINE
+	; Check for zero state (LFSR death state - produces 0 forever)
+	; On ROM targets, MATH_RND is in uninitialized RAM and may be all zeros
+	lda MATH_RND
+	ora MATH_RND + 1
+	ora MATH_RND + 2
+	bne .go
+	; Escape zero state with a fixed seed
+	lda #$A5
+	sta MATH_RND
+	lda #$3C
+	sta MATH_RND + 1
+	lda #$78
+	sta MATH_RND + 2
+.go
 	; rotate the middle byte left
 	ldy MATH_RND + 1 ; will move to seed + 2 at the end
 	; compute seed + 1 ($1B>>1 = %1101)
@@ -599,6 +625,46 @@ I_RNDL SUBROUTINE
 	eor MATH_RND + 2
 	sty MATH_RND + 2 ; finish rotating byte 1 into 2
 	sta MATH_RND
+	rts
+	ENDIF
+	
+	; RANDOMIZE seed improver - spreads seed bits across all 3 bytes
+	; and warms up the LFSR to produce good output immediately.
+	IFCONST I_RANDOMIZE_IMPORTED
+I_RANDOMIZE SUBROUTINE
+	; Initialize MATH_RND_EXP for floating-point RND() compatibility
+	lda #$80
+	sta MATH_RND_EXP
+	; After pllongvar MATH_RND sets the seed bytes,
+	; spread them so all 3 bytes are non-trivial.
+	; With a BYTE seed only +0 is set; with INT +0/+1 are set.
+	; The LFSR derives new +0 and +1 from +2, so a zero +2
+	; causes the first several outputs to be zero.
+	lda MATH_RND
+	eor MATH_RND + 2
+	eor #$B4
+	sta MATH_RND + 2
+	lda MATH_RND + 1
+	eor MATH_RND
+	eor #$6D
+	sta MATH_RND + 1
+	; Ensure state is never all-zeros (LFSR death state)
+	lda MATH_RND
+	ora MATH_RND + 1
+	ora MATH_RND + 2
+	bne .nonzero
+	lda #$01
+	sta MATH_RND
+.nonzero
+	; Warm up LFSR to fully mix seed bits
+	jsr I_RNDL
+	jsr I_RNDL
+	jsr I_RNDL
+	jsr I_RNDL
+	jsr I_RNDL
+	jsr I_RNDL
+	jsr I_RNDL
+	jsr I_RNDL
 	rts
 	ENDIF
 	

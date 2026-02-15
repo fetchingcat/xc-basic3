@@ -17,10 +17,10 @@ Statement stmtFactory(ParseTree node, Compiler compiler) {
                                 "Loop_stmt", "Cont_stmt", "Exit_do_stmt", "For_stmt", "Next_stmt", "Exit_for_stmt",
                                 "Data_stmt", "Rem_stmt", "Swap_stmt", "Randomize_stmt", "On_stmt", "Error_stmt",
                                 "Open_stmt", "Get_stmt", "Close_stmt", "Asm_stmt", "Endasm_stmt", "Incbin_stmt",
-                                "Input_stmt", "Locate_stmt", "Load_stmt", "Save_stmt", "Memset_stmt",
+                                "Incbmp_stmt", "Input_stmt", "Locate_stmt", "Load_stmt", "Save_stmt", "Memset_stmt",
                                 "Memcpy_stmt", "Memshift_stmt", "Origin_stmt", "End_stmt", "Poke_stmt", "Sys_stmt",
                                 "Write_stmt", "Read_stmt", "Charat_stmt", "Screen_stmt", "Textat_stmt",
-                                "Wait_stmt", "Option_stmt", "Irq_stmt",
+                                "Wait_stmt", "Option_stmt", "Irq_stmt", "Bank_stmt",
                                 "Sprite_stmt", "Sprite_multicolor_stmt", "Sprite_clearhit_stmt",
                                 "Border_stmt", "Background_stmt", "Scroll_stmt", "Select_stmt", "Case_stmt", "Endselect_stmt",
                                 "VMode_stmt", "Sound_clear_stmt", "Volume_stmt", "Voice_stmt", "Filter_stmt", "Charset_stmt"]) {

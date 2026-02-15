@@ -328,12 +328,21 @@
 	pla
 	ENDIF
 	tax
+	IF TARGET & gametank
+	; ROM-safe: use indirect jump via R0/R1
+	lda.wx {1}
+	sta R0
+	lda.wx {2}
+	sta R1
+	jmp (R0)
+	ELSE
 	lda.wx {1}
 	sta .jump + 1
 	lda.wx {2}
 	sta .jump + 2
 .jump
 	jmp $ffff
+	ENDIF
 	ENDM
 	
 	; ON GOSUB statement
@@ -343,10 +352,24 @@
 	pla
 	ENDIF
 	tax
+	IF TARGET & gametank
+	; ROM-safe: use trampoline via R0/R1
+	lda.wx {1}
+	sta R0
+	lda.wx {2}
+	sta R1
+	jsr .trampoline
+	bne .done
+	beq .done
+.trampoline
+	jmp (R0)
+.done
+	ELSE
 	lda.wx {1}
 	sta .jump + 1
 	lda.wx {2}
 	sta .jump + 2
 .jump
 	jsr $ffff
+	ENDIF
 	ENDM

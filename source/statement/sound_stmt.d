@@ -24,6 +24,10 @@ class Voice_stmt : Statement
 
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("VOICE is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree stmtNode = node.children[0];
         ParseTree valueNode = stmtNode.children[0];
         Number n = new Number(valueNode, this.compiler);
@@ -85,6 +89,10 @@ class Filter_stmt : Statement
 
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("FILTER is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree stmtNode = node.children[0];
         ParseTree[] voiceSubCmdNodes = stmtNode.children[0..$];
         foreach(ref subCmd; voiceSubCmdNodes) {
@@ -125,6 +133,10 @@ class Volume_stmt : Statement
 
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("VOLUME is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree stmtNode = node.children[0];
         ParseTree valueNode = stmtNode.children[0];
         Expression e = new Expression(valueNode, this.compiler);
@@ -140,6 +152,10 @@ class Sound_clear_stmt : Statement
 
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("SOUND CLEAR is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         this.appendCode("    sound_clear\n");
     }
 }

@@ -6,6 +6,8 @@ string target = "c64";
 bool basicLoader = true;
 /** Program start address */
 int startAddress = -1;
+/** Variable segment start address (-1 = follows code) */
+int variableAddress = -1;
 /** If the program exceeds this limit, compilation will fail */
 int topAddress = -1;
 /** Maximum allowed string length */
@@ -20,3 +22,9 @@ bool fastIrqs = false;
 bool useSprites = false;
 /** Whether the program uses sound routines */
 bool useSound = false;
+
+/** ROM Banking support (GameTank specific) */
+/** Current bank being written to (-1 = fixed/code bank) */
+int currentBank = -1;
+/** Bank data storage: bankData[bankNum] = raw bytes */
+ubyte[][int] bankData;

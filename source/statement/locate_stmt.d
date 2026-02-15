@@ -5,6 +5,8 @@ import pegged.grammar;
 import compiler.compiler, compiler.type;
 import language.statement, language.expression;
 
+import globals;
+
 class Locate_stmt : Statement
 {
     /** Class constructor */
@@ -16,6 +18,10 @@ class Locate_stmt : Statement
     /** Compiles the statement */
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("LOCATE is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         Expression e;
         for(int i = 0; i <= 1; i++) {
             e = new Expression(this.node.children[0].children[i], compiler);

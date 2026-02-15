@@ -1,6 +1,7 @@
 module compiler.petscii;
 
 import std.string, std.conv, std.array, std.algorithm.searching, std.algorithm.comparison;
+import globals;  // For target-aware string encoding
 
 private ubyte[] petscii = [
     0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x14,0x20,0x0d,0x11,0x93,0x0a,0x0e,0x0f,
@@ -125,9 +126,13 @@ string asciiToPetsciiHex(string asciiString, ulong forcedLength, out bool trunca
 }
 
 private ubyte[] asciiToPetsciiBytes(string asciiString) {
-    ubyte[] pet;
+    ubyte[] result;
     bool escaped = false;
     string accu;
+    
+    // For GameTank target, use ASCII encoding instead of PETSCII
+    bool useAscii = (target == "gametank");
+    
     for(int i = 0; i < asciiString.length; i++) {
         char curChar = asciiString[i];
         if(!escaped && curChar == '{') {
@@ -137,20 +142,29 @@ private ubyte[] asciiToPetsciiBytes(string asciiString) {
         else if(escaped && curChar == '}') {
             escaped = false;
             if(isNumeric(accu)) {
-                pet ~= to!ubyte(accu);
-            } else {
+                // Numeric escape {65} = character code - pass through as-is for both
+                result ~= to!ubyte(accu);
+            } else if(!useAscii) {
+                // PETSCII escape sequences only apply to Commodore targets
                 ubyte replaced = escapeSequences.get(toUpper(accu), 0);
                 if(replaced > 0) {
-                    pet ~= replaced;
+                    result ~= replaced;
                 }
             }
+            // For GameTank, non-numeric escapes are ignored (no PETSCII control codes)
         }
         else if(!escaped) {
-            pet ~= petscii[curChar];
+            if(useAscii) {
+                // GameTank: use raw ASCII bytes
+                result ~= cast(ubyte)curChar;
+            } else {
+                // Commodore: use PETSCII conversion table
+                result ~= petscii[curChar];
+            }
         }
         else {
             accu ~= curChar; 
         }
     }
-    return pet;
+    return result;
 }

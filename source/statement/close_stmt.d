@@ -5,6 +5,8 @@ import pegged.grammar;
 import compiler.compiler, compiler.type;
 import language.statement, language.expression;
 
+import globals;
+
 /** Compiles a CLOSE statement */
 class Close_stmt : Statement
 {
@@ -17,6 +19,10 @@ class Close_stmt : Statement
     /** Compiles the statement */
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("CLOSE is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         Expression e = new Expression(this.node.children[0].children[0], compiler);
         e.setExpectedType(compiler.getTypes().get(Type.UINT8));
         e.eval();

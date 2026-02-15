@@ -7,7 +7,7 @@
  */
 
 import std.stdio, std.string, std.getopt, std.file, std.path,
-        std.conv, std.random, std.process, std.algorithm;
+        std.conv, std.random, std.process, std.algorithm, std.format;
 import core.stdc.stdlib;
 
 import pegged.grammar;
@@ -18,7 +18,7 @@ import compiler.compiler, compiler.library, compiler.sourcefile;
 import globals, optimizer;
 
 // Program version
-const string APP_VERSION = "v3.1.12";
+const string APP_VERSION = "v3.1.12-gt-1.0";
 
 /** Possible target options */
 const string[] targetOpts = [
@@ -35,12 +35,14 @@ const string[] targetOpts = [
     "pet3032",  // Commodore PET3000 series (32k RAM)
     "pet4016",  // Commodore PET4000 series (16k RAM)
     "pet4032",  // Commodore PET4000 series (32k RAM)
-    "pet8032"   // Commodore PET8000 series
+    "pet8032",  // Commodore PET8000 series
+    "gametank"  // GameTank console
 ];
 
 // Command line options
 private bool optimize = true;
 private bool keepImCode = false;
+private string outputFormat = "prg";  // prg, raw, or gtr (GameTank ROM)
 version(Windows) {
 	private string dasm = "dasm.exe";
 }
@@ -67,6 +69,7 @@ void main(string[] args)
             "basic-loader|b", &basicLoader,
             "start-address|o", &startAddress,
             "max-address|m", &topAddress,
+            "output-format|f", &outputFormat,
             "dasm|d", &dasm,
             "symbol|s", &symbolfile,
             "list|l", &listfile,
@@ -86,6 +89,27 @@ void main(string[] args)
     }
 
 	validateOptions(args);
+
+    // GameTank has no BASIC ROM, disable loader by default
+    // Also set default variable address if compiling to ROM
+    if(target == "gametank") {
+        basicLoader = false;
+        // For GTR output, default to ROM address and set up properly
+        if(outputFormat == "gtr") {
+            if(startAddress == -1) {
+                startAddress = 0xC100;  // Code after init stub
+            }
+            if(variableAddress == -1) {
+                variableAddress = 0x0200;  // Variables in RAM
+            }
+        }
+        // If code starts in ROM ($C000+) and no variable address specified,
+        // default variables to RAM at $0200
+        else if(variableAddress == -1 && startAddress >= 0xC000) {
+            variableAddress = 0x0200;
+        }
+    }
+
     setStartAddress();
     setEndAddress();
     
@@ -153,6 +177,11 @@ void main(string[] args)
 
     string cmd = dasm ~ " " ~ asmFilename ~ " -o" ~ outName ~ " -s" ~ tmpSymbolfile;
 
+    // GameTank target outputs raw binary (no PRG header)
+    if(target == "gametank") {
+        cmd ~= " -f3";
+    }
+
     if(listfile != "") {
         cmd ~= " -l" ~ listfile;
     }
@@ -179,6 +208,15 @@ void main(string[] args)
         exit(1);
     }
     else {
+        // For GameTank GTR format, post-process into complete ROM
+        if(target == "gametank" && outputFormat == "gtr") {
+            version(Windows) {
+                // Remove quotes added earlier for Windows shell
+                outName = outName[1..$-1];
+            }
+            buildGameTankRom(outName, tmpSymbolfile);
+        }
+        
         if(verbosity == VERBOSITY_INFO) {
             displayInformation(tmpSymbolfile);
         }
@@ -253,7 +291,12 @@ public void setStartAddress()
         }
     }
     else if(startAddress == -1) {
-        startAddress = 0x1000;
+        // GameTank: default to RAM start when not using GTR output format
+        if(target == "gametank") {
+            startAddress = 0x0200;
+        } else {
+            startAddress = 0x1000;
+        }
     }
 
      if(startAddress < 0 || startAddress > 0xffff) {
@@ -300,6 +343,10 @@ private void setEndAddress()
             case "pet4016":
                 topAddress = 0x4000;
                 break;
+
+            case "gametank":
+                topAddress = 0x1F00;  // Stack frame at $1F00
+                break;
                 
             default:
                 topAddress = 0x10000;
@@ -320,6 +367,7 @@ private void displayHelp(int exitCode, string errorMsg = "")
     stdout.writeln(errorMsg ~
 `
 XC=BASIC compiler version ` ~ APP_VERSION ~ " (" ~ __DATE__ ~ ")" ~ `
+(GameTank Edition)
 Copyright (c) 2019-2022 by Csaba Fekete (see LICENSE)
 Usage: xcbasic3 [options] <inputfile> <outputfile> [options]
 Options:
@@ -432,5 +480,137 @@ private void displayInformation(string tmpSymbolfile)
         stdout.writeln(
             "WARNING: The program has been successfully compiled, but it can't fit between $" 
             ~ asHex(startAddress) ~ " and $" ~ asHex(topAddress) ~ ". Use the -m option to change the top address.");
+    }
+}
+
+/**
+ * Build a complete GameTank ROM (.gtr) from compiled binary
+ * Creates init stub, sets vectors, pads to 2MB
+ */
+private void buildGameTankRom(string binFile, string symFile)
+{
+    import std.file : read, write;
+    
+    // Read the compiled binary
+    auto codeData = cast(ubyte[])read(binFile);
+    auto codeSize = codeData.length;
+    
+    // Find NMI and IRQ handlers from symbol file
+    int nmiAddr = startAddress;      // Default to code start
+    int irqAddr = startAddress + 8;  // Default offset
+    bool nmiExact = false, irqExact = false;
+    
+    // Parse symbol file to find handler addresses
+    // Format: "symbol_name hex_address (flags)"
+    // Prefer bare "nmi_entry"/"irq_entry" (from library) over
+    // prefixed "L_srcN.nmi_entry" (from BASIC inline ASM).
+    auto symLines = File(symFile).byLine();
+    foreach(line; symLines) {
+        auto lineStr = to!string(line);
+        auto parts = lineStr.split();
+        if(parts.length >= 2) {
+            import std.string : endsWith;
+            if(parts[0] == "nmi_entry") {
+                try {
+                    nmiAddr = to!int(parts[1], 16);
+                    nmiExact = true;
+                } catch(Exception e) {}
+            } else if(!nmiExact && parts[0].endsWith(".nmi_entry")) {
+                try {
+                    nmiAddr = to!int(parts[1], 16);
+                } catch(Exception e) {}
+            }
+            if(parts[0] == "irq_entry") {
+                try {
+                    irqAddr = to!int(parts[1], 16);
+                    irqExact = true;
+                } catch(Exception e) {}
+            } else if(!irqExact && parts[0].endsWith(".irq_entry")) {
+                try {
+                    irqAddr = to!int(parts[1], 16);
+                } catch(Exception e) {}
+            }
+        }
+    }
+    
+    // Create 16KB bank filled with $FF
+    ubyte[] bank = new ubyte[16384];
+    bank[] = 0xFF;
+    
+    // Init stub at $C000 (offset 0 in bank)
+    // This initializes hardware and jumps to user code
+    ubyte[] initStub = [
+        0x78,             // SEI
+        0xD8,             // CLD
+        0xA2, 0xFF,       // LDX #$FF
+        0x9A,             // TXS
+        0xA2, 0x00,       // LDX #0 (VIA wake delay)
+        0xE8,             // INX
+        0xD0, 0xFD,       // BNE -3
+        0xA9, 0x07,       // LDA #$07
+        0x8D, 0x03, 0x28, // STA $2803 (VIA_DDRA)
+        0xA9, 0xFF,       // LDA #$FF
+        0x8D, 0x01, 0x28, // STA $2801 (VIA_ORA)
+        0xA9, 0x05,       // LDA #5 (DMA_ENABLE | DMA_NMI)
+        0x8D, 0x07, 0x20, // STA $2007 (DMA_FLAGS)
+        0xA9, 0x08,       // LDA #8
+        0x8D, 0x05, 0x20, // STA $2005 (BANK_REG)
+        0x58,             // CLI
+        0x4C,             // JMP
+        cast(ubyte)(startAddress & 0xFF),
+        cast(ubyte)((startAddress >> 8) & 0xFF)
+    ];
+    
+    // Copy init stub to bank start
+    bank[0..initStub.length] = initStub[];
+    
+    // Copy code at $C100 (offset $100 in bank)
+    int codeOffset = startAddress - 0xC000;
+    if(codeOffset + codeSize <= 16384 - 6) {  // Leave room for vectors
+        bank[codeOffset..codeOffset + codeSize] = codeData[];
+    } else {
+        stderr.writeln("** ERROR ** Code too large for single ROM bank");
+        exit(1);
+    }
+    
+    // Set vectors at $FFFA (offset $3FFA in bank)
+    bank[0x3FFA] = cast(ubyte)(nmiAddr & 0xFF);
+    bank[0x3FFB] = cast(ubyte)((nmiAddr >> 8) & 0xFF);
+    bank[0x3FFC] = 0x00;  // Reset -> $C000
+    bank[0x3FFD] = 0xC0;
+    bank[0x3FFE] = cast(ubyte)(irqAddr & 0xFF);
+    bank[0x3FFF] = cast(ubyte)((irqAddr >> 8) & 0xFF);
+    
+    // Create 2MB ROM filled with $FF
+    ubyte[] rom = new ubyte[2 * 1024 * 1024];
+    rom[] = 0xFF;
+    
+    // Place code bank at position 127 (last 16KB, where reset vector is read from)
+    int bankOffset = 127 * 16384;
+    rom[bankOffset..bankOffset + 16384] = bank[];
+    
+    // Place data banks from BANK statements
+    foreach(bankNum, data; bankData) {
+        if(data.length > 0) {
+            if(data.length > 16384) {
+                stderr.writeln("** WARNING ** Bank " ~ to!string(bankNum) ~ " data (" ~ 
+                              to!string(data.length) ~ " bytes) exceeds 16KB, truncating");
+            }
+            int offset = bankNum * 16384;
+            size_t copyLen = data.length > 16384 ? 16384 : data.length;
+            rom[offset..offset + copyLen] = data[0..copyLen];
+            
+            if(verbosity >= VERBOSITY_NOTICE) {
+                stdout.writeln("  Bank " ~ to!string(bankNum) ~ ": " ~ to!string(data.length) ~ " bytes at $8000");
+            }
+        }
+    }
+    
+    // Write the final ROM
+    write(binFile, rom);
+    
+    if(verbosity >= VERBOSITY_NOTICE) {
+        stdout.writeln("GameTank ROM: " ~ binFile ~ " (2MB)");
+        stdout.writeln("  NMI: $" ~ format("%04X", nmiAddr) ~ ", IRQ: $" ~ format("%04X", irqAddr));
     }
 }

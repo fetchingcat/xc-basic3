@@ -19,6 +19,10 @@ class Irq_stmt : Statement
     /** Compiles the statement */
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("IRQ is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         useIrqs = true;
         const string irqType = toUpper(node.matches[0]);
         bool enable = toUpper(node.matches[2]) == "ON";

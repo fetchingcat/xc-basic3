@@ -13,3 +13,7 @@
 	IF TARGET & pet
     INCLUDE "irq/_pet.asm"
 	ENDIF
+    
+	IF TARGET & gametank
+	INCLUDE "irq/_gametank.asm"
+	ENDIF

@@ -5,6 +5,8 @@ import language.statement, language.expression;
 import compiler.compiler, compiler.type;
 import pegged.grammar;
 
+import globals;
+
 import std.conv;
 
 /** Parses and compiles a TEXTAT statement */
@@ -19,6 +21,10 @@ class Textat_stmt : Statement
     /** Compile */
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("TEXTAT is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree argList = this.node.children[0].children[0];
         Expression[4] e;
         Type[4] expectedTypes;

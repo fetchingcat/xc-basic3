@@ -77,5 +77,13 @@ I_FMOD SUBROUTINE
 	lda #<.tmp
 	ldy #>.tmp
 	jmp FMULT
+	IF TARGET & gametank
+	; ROM-based target: .tmp must be in RAM
+	SEG.U "FMOD_TMP"
+	ORG $01F8
+.tmp DS 4
+	SEG "LIBRARY"
+	ELSE
 .tmp HEX 00 00 00 00
+	ENDIF
 	ENDIF

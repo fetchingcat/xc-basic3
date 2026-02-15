@@ -5,6 +5,8 @@ import pegged.grammar;
 import compiler.compiler, compiler.type, compiler.variable;
 import language.statement, language.expression;
 
+import globals;
+
 class Get_stmt : Statement
 {
     /** Class constructor */
@@ -16,6 +18,10 @@ class Get_stmt : Statement
     /** Compiles the statement */
     void process()
     {
+        if(target == "gametank") {
+            compiler.displayError("GET is not supported on GameTank target. See the GameTank BASIC SDK documentation for alternatives.");
+            return;
+        }
         ParseTree args = this.node.children[0];
         //import std.stdio; writeln(args);
         bool hashStatement;
