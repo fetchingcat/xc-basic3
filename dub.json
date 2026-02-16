@@ -8,5 +8,7 @@
 	},
 	"description": "XC=BASIC Compiler Version 3",
 	"license": "MIT",
-	"name": "xcbasic3"
+	"name": "xcbasic3",
+	"dflags-linux-ldc": ["-link-defaultlib-shared=false"],
+	"lflags-linux": ["-lz"]
 }

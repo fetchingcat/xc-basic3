@@ -2,7 +2,7 @@
 ; XC=BASIC - GameTank IRQ/NMI Support
 ;
 ; NMI/IRQ entry points are defined inline in
-; gametank_sdk.bas (BASIC SDK). They handle:
+; gametank.bas (BASIC SDK). They handle:
 ;   NMI: clear frameflag, increment tick counter
 ;   IRQ: acknowledge blitter DMA
 ;
