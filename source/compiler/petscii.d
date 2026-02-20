@@ -125,7 +125,7 @@ string asciiToPetsciiHex(string asciiString, ulong forcedLength, out bool trunca
     return hex;
 }
 
-private ubyte[] asciiToPetsciiBytes(string asciiString) {
+ubyte[] asciiToPetsciiBytes(string asciiString) {
     ubyte[] result;
     bool escaped = false;
     string accu;
