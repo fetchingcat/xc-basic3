@@ -18,7 +18,7 @@ import compiler.compiler, compiler.library, compiler.sourcefile;
 import globals, optimizer;
 
 // Program version
-const string APP_VERSION = "v3.1.12-gt-1.1";
+const string APP_VERSION = "v3.1.12-gt-1.2";
 
 /** Possible target options */
 const string[] targetOpts = [
@@ -492,8 +492,53 @@ private void buildGameTankRom(string binFile, string symFile)
     import std.file : read, write;
     
     // Read the compiled binary
-    auto codeData = cast(ubyte[])read(binFile);
-    auto codeSize = codeData.length;
+    auto fullBinary = cast(ubyte[])read(binFile);
+    
+    // Determine if we have banked code
+    bool hasBankCode = bankCode.length > 0;
+    int codeBankNum = -1;
+    
+    // Extract main code and bank code from binary
+    ubyte[] mainCodeData;
+    ubyte[] bankCodeData;
+    
+    if(hasBankCode) {
+        // Binary starts at $8000 (bank code ORG).
+        // Main code is at offset $4100 (address $C100 = startAddress).
+        // Bank code occupies addresses $8000-$BFFF (offsets 0-$3FFF).
+        
+        // Get the code bank number
+        foreach(bNum, _; bankCode) {
+            codeBankNum = bNum;
+            break;
+        }
+        
+        // Validate: bank must not have both code and data
+        if(codeBankNum in bankData && bankData[codeBankNum].length > 0) {
+            stderr.writeln("** ERROR ** Bank " ~ to!string(codeBankNum) ~ 
+                          " has both code and data. Use separate banks for code and data.");
+            exit(1);
+        }
+        
+        // Extract bank code (first 16KB = $8000-$BFFF)
+        size_t bankCodeSize = fullBinary.length >= 0x4000 ? 0x4000 : fullBinary.length;
+        bankCodeData = new ubyte[16384];
+        bankCodeData[] = 0xFF;
+        bankCodeData[0..bankCodeSize] = fullBinary[0..bankCodeSize];
+        
+        // Extract main code (from offset $4100 = startAddress - $8000)
+        int mainOffset = startAddress - 0x8000;
+        if(mainOffset < fullBinary.length) {
+            mainCodeData = fullBinary[mainOffset..$].dup;
+        } else {
+            mainCodeData = [];
+        }
+    } else {
+        // No bank code - binary starts at startAddress as before
+        mainCodeData = fullBinary.dup;
+    }
+    
+    auto codeSize = mainCodeData.length;
     
     // Find NMI and IRQ handlers from symbol file
     int nmiAddr = startAddress;      // Default to code start
@@ -501,9 +546,6 @@ private void buildGameTankRom(string binFile, string symFile)
     bool nmiExact = false, irqExact = false;
     
     // Parse symbol file to find handler addresses
-    // Format: "symbol_name hex_address (flags)"
-    // Prefer bare "nmi_entry"/"irq_entry" (from library) over
-    // prefixed "L_srcN.nmi_entry" (from BASIC inline ASM).
     auto symLines = File(symFile).byLine();
     foreach(line; symLines) {
         auto lineStr = to!string(line);
@@ -538,7 +580,6 @@ private void buildGameTankRom(string binFile, string symFile)
     bank[] = 0xFF;
     
     // Init stub at $C000 (offset 0 in bank)
-    // This initializes hardware and jumps to user code
     ubyte[] initStub = [
         0x78,             // SEI
         0xD8,             // CLD
@@ -564,12 +605,12 @@ private void buildGameTankRom(string binFile, string symFile)
     // Copy init stub to bank start
     bank[0..initStub.length] = initStub[];
     
-    // Copy code at $C100 (offset $100 in bank)
+    // Copy main code at $C100 (offset $100 in bank)
     int codeOffset = startAddress - 0xC000;
     if(codeOffset + codeSize <= 16384 - 6) {  // Leave room for vectors
-        bank[codeOffset..codeOffset + codeSize] = codeData[];
+        bank[codeOffset..codeOffset + codeSize] = mainCodeData[];
     } else {
-        stderr.writeln("** ERROR ** Code too large for single ROM bank");
+        stderr.writeln("** ERROR ** Code too large for single ROM bank (fixed bank)");
         exit(1);
     }
     
@@ -585,9 +626,19 @@ private void buildGameTankRom(string binFile, string symFile)
     ubyte[] rom = new ubyte[2 * 1024 * 1024];
     rom[] = 0xFF;
     
-    // Place code bank at position 127 (last 16KB, where reset vector is read from)
+    // Place fixed code bank at position 127 (last 16KB, where reset vector is read from)
     int bankOffset = 127 * 16384;
     rom[bankOffset..bankOffset + 16384] = bank[];
+    
+    // Place banked code in ROM
+    if(hasBankCode && codeBankNum >= 0) {
+        int codeBankOffset = codeBankNum * 16384;
+        rom[codeBankOffset..codeBankOffset + 16384] = bankCodeData[];
+        
+        if(verbosity >= VERBOSITY_NOTICE) {
+            stdout.writeln("  Code bank " ~ to!string(codeBankNum) ~ ": code at $8000");
+        }
+    }
     
     // Place data banks from BANK statements
     foreach(bankNum, data; bankData) {

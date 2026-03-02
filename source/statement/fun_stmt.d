@@ -258,10 +258,23 @@ class Fun_stmt : Statement
                 this.addRoutine();
             }
 
+            // GameTank code banking: record which bank this routine belongs to.
+            // currentBank is only >= 0 inside a BANK block (gametank-only).
+            if(currentBank >= 0) {
+                this.routine.bankNum = currentBank;
+                routineBankMap[this.routine.getLabel()] = currentBank;
+            }
+
             compiler.setProc(fixSymbol(name) ~ "_" ~ this.getArgsHash());
             compiler.currentProc = this.routine;
-            appendCode("    IFCONST I_" ~ this.routine.getLabel() ~ "_IMPORTED\n");
-            appendCode(this.routine.getLabel() ~ " SUBROUTINE\n");
+            if(currentBank >= 0) {
+                // GameTank code banking: banked routines are always included
+                // (no IFCONST guard) since they live in a separate bank.
+                appendCode(this.routine.getLabel() ~ " SUBROUTINE\n");
+            } else {
+                appendCode("    IFCONST I_" ~ this.routine.getLabel() ~ "_IMPORTED\n");
+                appendCode(this.routine.getLabel() ~ " SUBROUTINE\n");
+            }
         }
         // Routine declaration
         else {

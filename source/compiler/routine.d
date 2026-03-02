@@ -46,6 +46,8 @@ class Routine
     public bool isDeclarationComplete = false;
     /** Inline function */
     protected bool isInline = false;
+    /** Which ROM bank this routine lives in (-1 = fixed bank, GameTank code banking) */
+    public int bankNum = -1;
 
      /** Class constructor */
     this(string name, bool isShared, string fileId, Compiler compiler, string keyword,
@@ -363,8 +365,13 @@ class RoutineCall : AccessorInterface
     {
         string asmCode;
         if(!routine.isInline) {
-            asmCode = "    import I_" ~ routine.getLabel() ~ "\n";
-            asmCode ~= "    jsr " ~ routine.getLabel() ~ "\n";
+            if(routine.bankNum >= 0) {
+                // GameTank code banking: cross-bank call via trampoline in fixed bank
+                asmCode = "    jsr TRAMP_" ~ routine.getLabel() ~ "\n";
+            } else {
+                asmCode = "    import I_" ~ routine.getLabel() ~ "\n";
+                asmCode ~= "    jsr " ~ routine.getLabel() ~ "\n";
+            }
             if(!routine.isStatic) {
                 asmCode ~= "    framefree " ~ to!string(routine.getStackFrameSize()) ~ "\n";
             }

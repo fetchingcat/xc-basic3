@@ -23,8 +23,13 @@ bool useSprites = false;
 /** Whether the program uses sound routines */
 bool useSound = false;
 
-/** ROM Banking support (GameTank specific) */
-/** Current bank being written to (-1 = fixed/code bank) */
+/** ROM Banking support (GameTank).
+  * currentBank tracks which bank the BANK statement has selected (-1 = fixed/code bank).
+  * Only set by bank_stmt, which guards for target == "gametank". */
 int currentBank = -1;
-/** Bank data storage: bankData[bankNum] = raw bytes */
+/** Bank data storage: bankData[bankNum] = raw bytes for INCBMP/INCBIN in that bank */
 ubyte[][int] bankData;
+/** Banked code storage: bankCode[bankNum] = assembly text for SUB/FUNCTION definitions in that bank */
+string[int] bankCode;
+/** Maps routine labels to their bank number for trampoline generation */
+int[string] routineBankMap;

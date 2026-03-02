@@ -13,6 +13,8 @@ import compiler.labelcollection, compiler.intermediatecode, compiler.sourcefile,
        compiler.variable, compiler.type, language.statement, compiler.routine,
        compiler.codeblock, compiler.helper;
 
+import globals;
+
 /** Verbosity level: errors only */
 public enum VERBOSITY_ERROR   = 0;
 /** Verbosity level: errors and warnings */
@@ -256,6 +258,22 @@ final class Compiler
                                 && stmt.classinfo.name != "statement.type_stmt.Field_def"
                                 && stmt.classinfo.name != "statement.type_stmt.Endtype_stmt") {
                                 this.displayError("TYPE blocks can only contain field or method definitions");
+                            }
+                            // GameTank code banking: inside a BANK block (outside
+                            // a SUB/FUNCTION), restrict to definition-only statements.
+                            if(currentBank >= 0 && !this.inProcedure) {
+                                immutable string stmtName = stmt.classinfo.name;
+                                if(stmtName != "statement.fun_stmt.Fun_stmt"
+                                    && stmtName != "statement.endfun_stmt.Endfun_stmt"
+                                    && stmtName != "statement.data_stmt.Data_stmt"
+                                    && stmtName != "statement.incbin_stmt.Incbin_stmt"
+                                    && stmtName != "statement.incbmp_stmt.Incbmp_stmt"
+                                    && stmtName != "statement.bank_stmt.Bank_stmt"
+                                    && stmtName != "statement.rem_stmt.Rem_stmt"
+                                    && stmtName != "statement.asm_stmt.Asm_stmt"
+                                    && stmtName != "statement.endasm_stmt.Endasm_stmt") {
+                                    this.displayError("Only SUB, FUNCTION, DATA, INCBIN, INCBMP, ASM, and BANK statements are allowed inside a BANK block");
+                                }
                             }
                             stmt.process();
                         }

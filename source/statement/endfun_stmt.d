@@ -33,7 +33,13 @@ class Endfun_stmt : Statement
                 "\" never calls itself, consider making it STATIC");
         }
 
-        appendCode("    rts\n    ENDIF\n\n");
+        if(compiler.currentProc.bankNum >= 0) {
+            // GameTank code banking: banked routines skip ENDIF since no
+            // matching IFCONST was emitted (see fun_stmt.d).
+            appendCode("    rts\n\n");
+        } else {
+            appendCode("    rts\n    ENDIF\n\n");
+        }
 
         compiler.clearProc();
         compiler.currentProcName = "";
