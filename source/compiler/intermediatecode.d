@@ -266,29 +266,75 @@ xcb_pop_bank SUBROUTINE
     }
 
     /**
-     * Generate the bank code section at ORG $8000 (switchable ROM window).
-     * V1: Only one code bank is supported.
+     * Generate the bank code section using RORG $8000 blocks (switchable ROM window).
+     * Each code bank gets its own 16KB-aligned block in the binary output.
+     * DASM's RORG lets each block assemble as if at $8000, while the actual
+     * file offset advances sequentially. The ROM builder extracts each 16KB
+     * chunk by its position in the binary.
+     *
+     * The section starts at ORG $0 to avoid physical address conflicts with
+     * the main code at $C100. DASM's 16-bit address space limits us to
+     * floor(startAddress / 16384) code banks in a single pass.
+     *
+     * Binary layout (before main code):
+     *   Offset 0x0000: bank N1 code (RORG $8000, padded to 16KB)
+     *   Offset 0x4000: bank N2 code (RORG $8000, padded to 16KB)
+     *   ...
+     *   Offset startAddress: main code (ORG $C100)
+     *
+     * Banks are emitted in sorted order so the ROM builder can map
+     * file position -> bank number deterministically.
      */
     private string generateBankCodeSection()
     {
-        // V1: verify only one bank has code
-        if(bankCode.length > 1) {
+        import std.algorithm : sort;
+
+        // Collect and sort bank numbers for deterministic output order
+        int[] bankNums;
+        foreach(bNum, _; bankCode) {
+            bankNums ~= bNum;
+        }
+        sort(bankNums);
+
+        // GameTank code banking: verify that N banks x 16KB fits below startAddress.
+        // DASM's 16-bit address space means all bank RORG blocks and main code
+        // must coexist without overlapping physical addresses.
+        int maxBanks = startAddress / 16384;
+        if(bankNums.length > maxBanks) {
             import core.stdc.stdlib : exit;
             import std.stdio : stderr;
-            stderr.writeln("** ERROR ** V1 code banking supports only one code bank. " ~
-                          "Found code in " ~ to!string(bankCode.length) ~ " banks.");
+            stderr.writeln("** ERROR ** Too many code banks (" ~ to!string(bankNums.length) ~
+                          "). Maximum " ~ to!string(maxBanks) ~
+                          " code banks fit below start address $" ~
+                          to!string(startAddress, 16) ~ ".");
             exit(1);
         }
 
-        string code = "\n; ===== Banked Code Section =====\n" ~
+        // Start bank code at ORG $0 so Nx16KB blocks don't collide
+        // with main code at startAddress ($C100).
+        string code = "\n; ===== Banked Code Sections (RORG) =====\n" ~
                        "    SEG \"BANK_CODE\"\n" ~
-                       "    ORG $8000\n" ~
-                       "FPUSH SET 0\n" ~
-                       "FPULL SET 0\n\n";
+                       "    ORG $0\n";
 
-        foreach(bankNum, bankAsm; bankCode) {
-            code ~= "; --- Bank " ~ to!string(bankNum) ~ " code ---\n";
-            code ~= bankAsm;
+        foreach(idx, bNum; bankNums) {
+            code ~= "\n; --- Bank " ~ to!string(bNum) ~ " code ---\n";
+
+            if(idx > 0) {
+                // Advance to next 16KB boundary for subsequent banks
+                code ~= "    ALIGN 16384\n";
+            }
+
+            // RORG: assemble following code as if at $8000 (virtual origin)
+            // while actual file offset continues from the ALIGN position
+            code ~= "    RORG $8000\n" ~
+                     "FPUSH SET 0\n" ~
+                     "FPULL SET 0\n";
+            code ~= bankCode[bNum];
+            // GameTank code banking: end-of-bank label for size reporting.
+            // The ROM builder reads xcb_cbank_N_end from the symbol file
+            // to compute actual code size = xcb_cbank_N_end - $8000.
+            code ~= "xcb_cbank_" ~ to!string(bNum) ~ "_end\n";
+            code ~= "    REND\n";
         }
 
         return code;

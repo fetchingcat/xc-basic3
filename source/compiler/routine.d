@@ -366,8 +366,22 @@ class RoutineCall : AccessorInterface
         string asmCode;
         if(!routine.isInline) {
             if(routine.bankNum >= 0) {
-                // GameTank code banking: cross-bank call via trampoline in fixed bank
-                asmCode = "    jsr TRAMP_" ~ routine.getLabel() ~ "\n";
+                // GameTank code banking: check if caller is in the same bank.
+                // If so, skip the trampoline and call directly -- we're already
+                // mapped into the right bank, so push/switch/pop is wasted work.
+                bool sameBank = false;
+                if(compiler.inProcedure && compiler.currentProc !is null) {
+                    if(compiler.currentProc.bankNum == routine.bankNum) {
+                        sameBank = true;
+                    }
+                }
+                if(sameBank) {
+                    // Intra-bank call: direct jsr (no trampoline needed)
+                    asmCode = "    jsr " ~ routine.getLabel() ~ "\n";
+                } else {
+                    // Cross-bank call: trampoline pushes bank, switches, calls, pops
+                    asmCode = "    jsr TRAMP_" ~ routine.getLabel() ~ "\n";
+                }
             } else {
                 asmCode = "    import I_" ~ routine.getLabel() ~ "\n";
                 asmCode ~= "    jsr " ~ routine.getLabel() ~ "\n";

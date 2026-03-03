@@ -18,7 +18,7 @@ import compiler.compiler, compiler.library, compiler.sourcefile;
 import globals, optimizer;
 
 // Program version
-const string APP_VERSION = "v3.1.12-gt-1.2";
+const string APP_VERSION = "v3.1.12-gt-1.3";
 
 /** Possible target options */
 const string[] targetOpts = [
@@ -455,6 +455,28 @@ private void displayInformation(string tmpSymbolfile)
 
     int[string] symbols = getSymbols(tmpSymbolfile);
     
+    // GameTank code banking: collect code bank end symbols for segment table
+    import std.algorithm : sort;
+    int[int] codeBankEndAddrs;
+    if(bankCode.length > 0) {
+        auto bankSymLines = File(tmpSymbolfile).byLine();
+        foreach(line; bankSymLines) {
+            auto lineStr = to!string(line);
+            auto parts = lineStr.split();
+            if(parts.length >= 2) {
+                import std.string : startsWith, endsWith;
+                if(startsWith(parts[0], "xcb_cbank_") && endsWith(parts[0], "_end")) {
+                    try {
+                        auto bankStr = parts[0]["xcb_cbank_".length .. $ - "_end".length];
+                        int bNum = to!int(bankStr);
+                        int endAddr = to!int(parts[1], 16);
+                        codeBankEndAddrs[bNum] = endAddr;
+                    } catch(Exception e) {}
+                }
+            }
+        }
+    }
+    
     const string separator = "+---------------+-------+-------+"; 
     stdout.writeln("Complete. (0)");
     stdout.writeln(separator ~ "\n|    Segment    | Start |  End  |\n" ~ separator);
@@ -462,6 +484,19 @@ private void displayInformation(string tmpSymbolfile)
         stdout.writeln("|BASIC Loader   | $" ~ asHex(startAddress) ~ " | $" ~ asHex(symbols["prg_start"] - 1) ~ " |");
     }
     stdout.writeln("|Program code   | $" ~ asHex(symbols["prg_start"]) ~ " | $" ~ asHex(symbols["library_start"] - 1) ~ " |");
+    // GameTank code banking: show code bank segments in the table
+    if(codeBankEndAddrs.length > 0) {
+        int[] sortedBanks;
+        foreach(bNum, _; codeBankEndAddrs) {
+            sortedBanks ~= bNum;
+        }
+        sort(sortedBanks);
+        foreach(bNum; sortedBanks) {
+            import std.format : format;
+            string label = format("Code bank %-4d", bNum);
+            stdout.writeln("|" ~ label ~ " | $" ~ asHex(0x8000) ~ " | $" ~ asHex(codeBankEndAddrs[bNum] - 1) ~ " |");
+        }
+    }
     if(symbols["data_start"] > symbols["library_start"]) {
         stdout.writeln("|Library        | $" ~ asHex(symbols["library_start"]) ~ " | $" ~ asHex(symbols["data_start"] - 1) ~ " |");
     }
@@ -490,44 +525,62 @@ private void displayInformation(string tmpSymbolfile)
 private void buildGameTankRom(string binFile, string symFile)
 {
     import std.file : read, write;
+    import std.algorithm : sort;
+    
+    string asHex(int number) {
+        return to!string(rightJustifier(to!string(number, 16), 4, '0'));
+    }
     
     // Read the compiled binary
     auto fullBinary = cast(ubyte[])read(binFile);
     
     // Determine if we have banked code
     bool hasBankCode = bankCode.length > 0;
-    int codeBankNum = -1;
     
-    // Extract main code and bank code from binary
-    ubyte[] mainCodeData;
-    ubyte[] bankCodeData;
+    // Collect and sort bank numbers (must match order in generateBankCodeSection)
+    int[] codeBankNums;
+    foreach(bNum, _; bankCode) {
+        codeBankNums ~= bNum;
+    }
+    sort(codeBankNums);
     
-    if(hasBankCode) {
-        // Binary starts at $8000 (bank code ORG).
-        // Main code is at offset $4100 (address $C100 = startAddress).
-        // Bank code occupies addresses $8000-$BFFF (offsets 0-$3FFF).
-        
-        // Get the code bank number
-        foreach(bNum, _; bankCode) {
-            codeBankNum = bNum;
-            break;
-        }
-        
-        // Validate: bank must not have both code and data
-        if(codeBankNum in bankData && bankData[codeBankNum].length > 0) {
-            stderr.writeln("** ERROR ** Bank " ~ to!string(codeBankNum) ~ 
+    // Validate: no bank has both code and data
+    foreach(bNum; codeBankNums) {
+        if(bNum in bankData && bankData[bNum].length > 0) {
+            stderr.writeln("** ERROR ** Bank " ~ to!string(bNum) ~ 
                           " has both code and data. Use separate banks for code and data.");
             exit(1);
         }
+    }
+    
+    // Extract main code and per-bank code from binary
+    ubyte[] mainCodeData;
+    ubyte[][] bankCodeChunks;  // One 16KB chunk per code bank, in sorted order
+    
+    if(hasBankCode) {
+        // Binary layout: Nx16KB bank code blocks at $8000, then main code at startAddress.
+        // Each bank block is 16KB (ALIGN 16384 in assembly).
+        // Main code starts at offset (N * 16384) + (startAddress - $8000).
+        int numBanks = cast(int)codeBankNums.length;
         
-        // Extract bank code (first 16KB = $8000-$BFFF)
-        size_t bankCodeSize = fullBinary.length >= 0x4000 ? 0x4000 : fullBinary.length;
-        bankCodeData = new ubyte[16384];
-        bankCodeData[] = 0xFF;
-        bankCodeData[0..bankCodeSize] = fullBinary[0..bankCodeSize];
+        // Extract each bank's 16KB chunk
+        foreach(idx, bNum; codeBankNums) {
+            int chunkOffset = cast(int)(idx * 16384);
+            ubyte[] chunk = new ubyte[16384];
+            chunk[] = 0xFF;
+            
+            if(chunkOffset < fullBinary.length) {
+                size_t available = fullBinary.length - chunkOffset;
+                size_t copyLen = available >= 16384 ? 16384 : available;
+                chunk[0..copyLen] = fullBinary[chunkOffset..chunkOffset + copyLen];
+            }
+            bankCodeChunks ~= chunk;
+        }
         
-        // Extract main code (from offset $4100 = startAddress - $8000)
-        int mainOffset = startAddress - 0x8000;
+        // Main code starts after all bank code blocks.
+        // Bank code starts at ORG $0, so binary offset of main code
+        // equals startAddress directly.
+        int mainOffset = startAddress;
         if(mainOffset < fullBinary.length) {
             mainCodeData = fullBinary[mainOffset..$].dup;
         } else {
@@ -545,13 +598,16 @@ private void buildGameTankRom(string binFile, string symFile)
     int irqAddr = startAddress + 8;  // Default offset
     bool nmiExact = false, irqExact = false;
     
-    // Parse symbol file to find handler addresses
+    // GameTank code banking: track end addresses for size reporting
+    int[int] codeBankEndAddrs;  // bank number to end address (virtual, relative to $8000)
+    
+    // Parse symbol file to find handler addresses and code bank sizes
     auto symLines = File(symFile).byLine();
     foreach(line; symLines) {
         auto lineStr = to!string(line);
         auto parts = lineStr.split();
         if(parts.length >= 2) {
-            import std.string : endsWith;
+            import std.string : endsWith, startsWith;
             if(parts[0] == "nmi_entry") {
                 try {
                     nmiAddr = to!int(parts[1], 16);
@@ -570,6 +626,16 @@ private void buildGameTankRom(string binFile, string symFile)
             } else if(!irqExact && parts[0].endsWith(".irq_entry")) {
                 try {
                     irqAddr = to!int(parts[1], 16);
+                } catch(Exception e) {}
+            }
+            // GameTank code banking: parse xcb_cbank_N_end symbols for size reporting
+            if(startsWith(parts[0], "xcb_cbank_") && endsWith(parts[0], "_end")) {
+                try {
+                    // Extract bank number from "xcb_cbank_N_end"
+                    auto bankStr = parts[0]["xcb_cbank_".length .. $ - "_end".length];
+                    int bNum = to!int(bankStr);
+                    int endAddr = to!int(parts[1], 16);
+                    codeBankEndAddrs[bNum] = endAddr;
                 } catch(Exception e) {}
             }
         }
@@ -630,13 +696,23 @@ private void buildGameTankRom(string binFile, string symFile)
     int bankOffset = 127 * 16384;
     rom[bankOffset..bankOffset + 16384] = bank[];
     
-    // Place banked code in ROM
-    if(hasBankCode && codeBankNum >= 0) {
-        int codeBankOffset = codeBankNum * 16384;
-        rom[codeBankOffset..codeBankOffset + 16384] = bankCodeData[];
-        
-        if(verbosity >= VERBOSITY_NOTICE) {
-            stdout.writeln("  Code bank " ~ to!string(codeBankNum) ~ ": code at $8000");
+    // Place banked code in ROM (one 16KB chunk per code bank)
+    if(hasBankCode) {
+        foreach(idx, bNum; codeBankNums) {
+            int codeBankOffset = bNum * 16384;
+            rom[codeBankOffset..codeBankOffset + 16384] = bankCodeChunks[idx][];
+            
+            if(verbosity >= VERBOSITY_NOTICE) {
+                // GameTank code banking: show size if end symbol was found
+                if(bNum in codeBankEndAddrs) {
+                    int codeBytes = codeBankEndAddrs[bNum] - 0x8000;
+                    stdout.writeln("  Code bank " ~ to!string(bNum) ~ ": " ~
+                                  to!string(codeBytes) ~ " bytes at $8000-$" ~
+                                  asHex(codeBankEndAddrs[bNum] - 1));
+                } else {
+                    stdout.writeln("  Code bank " ~ to!string(bNum) ~ ": code at $8000");
+                }
+            }
         }
     }
     

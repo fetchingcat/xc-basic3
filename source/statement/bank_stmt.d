@@ -38,15 +38,17 @@ class Bank_stmt : Statement
 
         // Get the bank specifier from parse tree
         // The grammar is: BANK WS (Number / "FIXED")
-        // So children[0] is the Bank_stmt node, and matches contains the parsed content
+        // matches[] concatenates all terminal matches: ["bank", ...digits/fixed...]
+        // For multi-digit numbers, each digit is a separate match entry,
+        // so we must join all matches after the keyword.
         string bankSpec;
         
-        // Try to get the specifier from node's matches (for "FIXED" or number)
         if(node.children.length > 0 && node.children[0].matches.length >= 2) {
-            // matches[0] = "bank", matches[1] = the specifier
-            bankSpec = node.children[0].matches[1];
+            // Join all matches after "bank" to handle multi-digit numbers
+            // e.g. ["bank","1","0"] -> "10", ["bank","fixed"] -> "fixed"
+            bankSpec = join(node.children[0].matches[1..$]);
         } else if(node.children.length > 0 && node.children[0].children.length > 0) {
-            // Try child node
+            // Fallback: extract from child node
             auto child = node.children[0].children[0];
             if(child.matches.length > 0) {
                 bankSpec = join(child.matches);
